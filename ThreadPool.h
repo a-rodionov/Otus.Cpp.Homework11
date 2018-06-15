@@ -1,20 +1,20 @@
 #pragma once
 
 #include <iostream>
-#include <thread>
-#include <condition_variable>
-#include <atomic>
 #include <vector>
-#include <list>
 #include <queue>
+#include <atomic>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <boost/asio.hpp>
+#include <boost/log/trivial.hpp>
 
-template<typename MessageType, typename ThreadHandler>
 class ThreadPool {
 
 public:
 
-  ThreadPool()
-    : done{false} {}
+  ThreadPool() = default;
 
   ~ThreadPool() {
     JoinWorkers();
@@ -25,27 +25,74 @@ public:
   ThreadPool(ThreadPool&&) = delete;
   ThreadPool& operator=(ThreadPool&&) = delete;
 
-  template<typename ... Args>
-  void AddWorker(Args&& ... args) {
+  auto AddWorker() {
+    // Одновременно разрешается исполнение лишь одного метода AddWorker 
     std::lock_guard<std::mutex> lk(threads_mutex);
-    thread_handlers.push_back(std::make_shared<ThreadHandler>(std::forward<Args>(args)...));
+    // Если обрабатывающих потоков еще нет, то создается io_service::work,
+    // чтобы обрабатывающий поток при запуске io_service.run() не завершался
+    // при остутствии задач в очереди.
+    if(threads.empty()) {
+      work = std::make_shared<boost::asio::io_service::work>(io_service);
+    }
+
+    is_new_thread_on_pause = true;
+    is_new_thread_force_terminate = false;
+    is_new_thread_started = false;
+
+    // При запуске обрабатывающий поток ожидает сброса флага is_new_thread_on_pause для
+    // продолжения работы. Данное разрешение вместе с флагом is_new_thread_force_terminate
+    // устанавливает основной поток. Данная процедура позволяет основному потоку сразу завершить
+    // обрабатывающий при возникновении исключений. Как только обрабатывающий поток успешно
+    // продолжит работу, он установит флаг is_new_thread_started. Основной поток ожидает его
+    // установки, что гарантирует, что при выходе из метода AddWorker будет работать еще один
+    // обрабатывающий поток. Таким образом, вызов метода AddWorker является блокирующим и
+    // гарантирующем, что обрабатывающий поток будет создан и работать или никакие изменения
+    // не будут произведены и сгенерируется исключение.
+    auto worker_thread = std::thread([this] () {
+      while(is_new_thread_on_pause)
+        std::this_thread::yield();
+      if(is_new_thread_force_terminate)
+        return;
+      is_new_thread_started = true;
+
+      for(;;) {
+        try {
+          io_service.run();
+          break;
+        }
+        catch (std::exception& exc) {
+          BOOST_LOG_TRIVIAL(error) << exc.what();
+          std::lock_guard<std::mutex> lk(exceptions_mutex);
+          exceptions.push(std::current_exception());
+        }
+      }
+    });
+
     try {
-      threads.push_back(std::thread(&ThreadPool::WorkerThread, this, thread_handlers.back()));
+      threads.push_back(std::move(worker_thread));
+      is_new_thread_on_pause = false;
+      while(!is_new_thread_started)
+        std::this_thread::yield();
     }
-    catch(...) {
-      thread_handlers.pop_back();
-      throw;
+    catch(std::exception& exc) {
+      if(threads.empty()) {
+        work.reset();
+      }
+      is_new_thread_force_terminate = true;
+      is_new_thread_on_pause = false;
+      if(worker_thread.joinable()) {
+        worker_thread.join();
+      }
+      throw exc;
     }
+    return threads.back().get_id();
   }
 
-  auto StopWorkers() {
+  void StopWorkers() {
     std::lock_guard<std::mutex> lk(threads_mutex);
     JoinWorkers();
-    auto thread_handlers_copy{thread_handlers};
-    thread_handlers.clear();
     threads.clear();
-    done = false;
-    return thread_handlers_copy;
+    io_service.reset();
   }
 
   auto WorkersCount() const {
@@ -53,16 +100,19 @@ public:
     return threads.size();
   }
 
-  void PushMessage(const MessageType& message) {
-    std::lock_guard<std::mutex> lk(queue_mutex);
-    messages.push(message);
-    queue_event.notify_one();
+  template<typename Task>
+  void AddTask(Task&& task) {
+    io_service.post(task);
   }
 
-  void PushMessage(MessageType&& message) {
-    std::lock_guard<std::mutex> lk(queue_mutex);
-    messages.push(std::move(message));
-    queue_event.notify_one();
+  std::exception_ptr GetLastException() {
+    std::exception_ptr exc;
+    std::lock_guard<std::mutex> lk(exceptions_mutex);
+    if (!exceptions.empty()) {
+      exc = exceptions.front();
+      exceptions.pop();
+    }
+    return exc;
   }
 
 private:
@@ -71,8 +121,8 @@ private:
     if(threads.empty()) {
       return;
     }
-    done = true;
-    queue_event.notify_all();
+
+    work.reset();
     for(auto& thread : threads) {
       if(thread.joinable()) {
         thread.join();
@@ -80,32 +130,15 @@ private:
     }
   }
 
-  void WorkerThread(const std::shared_ptr<ThreadHandler>& thread_handler) {
-    try {
-      while(true) {
-        std::unique_lock<std::mutex> lk(queue_mutex);
-        queue_event.wait(lk, [&](){ return (!messages.empty() || done); });
-        if(messages.empty()) {
-          break;
-        }
-        auto message = messages.front();
-        messages.pop();
-        lk.unlock();
-        (*thread_handler)(message);
-      }
-    }
-    catch (const std::exception& e)
-    {
-      std::cerr << e.what() << std::endl;
-    }
-  }
-
+  boost::asio::io_service io_service;
+  std::shared_ptr<boost::asio::io_service::work> work;
   std::vector<std::thread> threads;
-  std::list<std::shared_ptr<ThreadHandler>> thread_handlers;
   mutable std::mutex threads_mutex;
-  std::atomic_bool done;
 
-  std::queue<MessageType> messages;
-  std::mutex queue_mutex;
-  std::condition_variable queue_event;
+  std::queue<std::exception_ptr> exceptions;
+  std::mutex exceptions_mutex;
+
+  std::atomic_bool is_new_thread_on_pause;
+  std::atomic_bool is_new_thread_force_terminate;
+  std::atomic_bool is_new_thread_started;
 };

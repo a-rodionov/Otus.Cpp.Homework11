@@ -27,10 +27,10 @@ BOOST_AUTO_TEST_CASE(simple_file_output)
 
   commandProcessor->Process(&testData.front(), testData.size(), true);
 
-  auto thread_handlers = fileOutput->StopWorkers();
+  auto file_statistics = fileOutput->StopWorkers();
 
-  BOOST_REQUIRE_EQUAL(1, thread_handlers.size());
-  auto filenames = thread_handlers.front()->GetProcessedFilenames();
+  BOOST_REQUIRE_EQUAL(1, file_statistics.size());
+  auto filenames = fileOutput->GetProcessedFilenames();
   BOOST_REQUIRE_EQUAL(1, filenames.size());
 
   std::ifstream ifs{filenames.at(0).c_str(), std::ifstream::in};
@@ -49,13 +49,12 @@ BOOST_AUTO_TEST_CASE(simple_file_output)
 
 BOOST_AUTO_TEST_CASE(file_output_to_locked_file)
 {
-  FileOutputThreadHandler fileOutput;
   std::string result;
   std::string goodResult{"bulk: cmd1, cmd2, cmd3"};
   std::list<std::string> testData{"cmd1", "cmd2", "cmd3"};
   size_t timestamp {123};
   unsigned short counter {0};
-  auto filename = MakeFilename(timestamp, std::this_thread::get_id(), counter);
+  auto filename = MakeFilename(timestamp, counter);
 
   std::remove(filename.c_str());
 
@@ -63,7 +62,7 @@ BOOST_AUTO_TEST_CASE(file_output_to_locked_file)
   BOOST_REQUIRE_EQUAL(true, -1 != file_handler);
   BOOST_REQUIRE_EQUAL(true, -1 != flock( file_handler, LOCK_EX | LOCK_NB ));
   
-  BOOST_CHECK_THROW(fileOutput(std::make_pair(timestamp, testData)), std::runtime_error);
+  BOOST_CHECK_THROW(WriteBulkToFile(timestamp, testData, counter), std::runtime_error);
   
   flock(file_handler, LOCK_UN | LOCK_NB);
   close(file_handler);
