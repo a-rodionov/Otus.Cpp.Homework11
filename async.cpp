@@ -22,7 +22,6 @@ void receive(handle_t handle, const char *data, std::size_t size) {
   }
   catch(...) {
     std::cerr << __PRETTY_FUNCTION__ << ". Failed to process data.\n";
-    return;
   }
 }
 
@@ -32,7 +31,6 @@ void disconnect(handle_t handle) {
   }
   catch(...) {
     std::cerr << __PRETTY_FUNCTION__ << ". Failed to erase context.\n";
-    return;
   }
 }
 
