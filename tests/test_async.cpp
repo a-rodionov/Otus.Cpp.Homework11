@@ -67,11 +67,9 @@ BOOST_AUTO_TEST_CASE(concat_multiple_receive)
 
   {
     smart_handle handle_1(connect(3), close_handle);
-    std::for_each(std::cbegin(testData)
-                  , std::cend(testData)
-                  , [&handle_1](const auto& symbol){
-                    receive(handle_1.get(), &symbol, 1);
-                  });
+    for(const auto& symbol : testData) {
+      receive(handle_1.get(), &symbol, 1);
+    }
   }
   std::this_thread::sleep_for(200ms);
 
