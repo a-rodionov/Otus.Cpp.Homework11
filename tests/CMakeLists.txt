@@ -5,7 +5,7 @@ function(test name)
   target_compile_definitions(${name} PRIVATE BOOST_TEST_DYN_LINK BOOST_LOG_DYN_LINK)
   target_include_directories(${name} PRIVATE ${PROJECT_SOURCE_DIR})
   target_link_libraries (${name} 
-      libasync
+      async
       ${Boost_LIBRARIES}
       ${CMAKE_THREAD_LIBS_INIT}
   )
