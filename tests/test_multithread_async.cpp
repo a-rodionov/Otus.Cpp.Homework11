@@ -31,7 +31,7 @@ void CallAllFunctionsInSingleThread(
         SingleContextTestSet& test_set,
         std::atomic_bool& is_thread_ready,
         std::atomic_bool& start_thread) {
-  ContextManager::Instance().SetDefaultOstream(test_set.output);
+  ContextManager::Instance().SetDefaultOstream(std::make_shared<SharedOstream>(test_set.output));
   smart_handle handle(connect(3), close_handle);
 
   is_thread_ready = true;
@@ -195,7 +195,7 @@ BOOST_AUTO_TEST_CASE(multiple_contexts_in_thread)
 
   // Все контексты будут открыты в главном потоке, а закрыты в отдельных потоках
   for(size_t i{0}; i < test_sets.size(); ++i) {
-    ContextManager::Instance().SetDefaultOstream(test_sets[i].output);
+    ContextManager::Instance().SetDefaultOstream(std::make_shared<SharedOstream>(test_sets[i].output));
     test_sets[i].handle = connect(3);
     test_sets[i].thread = std::thread(CallAllFunctionsInMultipleThreads<test_sets.size()>,
                                       std::ref(test_sets),

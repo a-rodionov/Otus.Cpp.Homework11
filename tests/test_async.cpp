@@ -41,7 +41,7 @@ BOOST_AUTO_TEST_CASE(no_processing_after_disconnect)
                       "cmd5\n"};
   std::ostringstream oss;
 
-  ContextManager::Instance().SetDefaultOstream(oss);
+  ContextManager::Instance().SetDefaultOstream(std::make_shared<SharedOstream>(oss));
 
   smart_handle handle_1(connect(3), close_handle);
   disconnect(handle_1.get());
@@ -63,7 +63,7 @@ BOOST_AUTO_TEST_CASE(concat_multiple_receive)
   };
   std::ostringstream oss;
 
-  ContextManager::Instance().SetDefaultOstream(oss);
+  ContextManager::Instance().SetDefaultOstream(std::make_shared<SharedOstream>(oss));
 
   {
     smart_handle handle_1(connect(3), close_handle);
@@ -84,7 +84,7 @@ BOOST_AUTO_TEST_CASE(output_as_soon_as_possible)
   std::string result{"bulk: cmd1, cmd2, cmd3\n"};
   std::ostringstream oss;
 
-  ContextManager::Instance().SetDefaultOstream(oss);
+  ContextManager::Instance().SetDefaultOstream(std::make_shared<SharedOstream>(oss));
 
   smart_handle handle_1(connect(3), close_handle);
   receive(handle_1.get(), testData[0].c_str(), testData[0].size());
@@ -112,7 +112,7 @@ BOOST_AUTO_TEST_CASE(flush_output_by_disconnect)
   };
   std::ostringstream oss;
 
-  ContextManager::Instance().SetDefaultOstream(oss);
+  ContextManager::Instance().SetDefaultOstream(std::make_shared<SharedOstream>(oss));
 
   {
     smart_handle handle_1(connect(3), close_handle);
@@ -151,10 +151,10 @@ BOOST_AUTO_TEST_CASE(process_multiple_handles)
   std::ostringstream oss_1, oss_2;
 
   {
-    ContextManager::Instance().SetDefaultOstream(oss_1);
+    ContextManager::Instance().SetDefaultOstream(std::make_shared<SharedOstream>(oss_1));
     smart_handle handle_1(connect(3), close_handle);
 
-    ContextManager::Instance().SetDefaultOstream(oss_2);
+    ContextManager::Instance().SetDefaultOstream(std::make_shared<SharedOstream>(oss_2));
     smart_handle handle_2(connect(3), close_handle);
 
     auto itr_1 = std::cbegin(testData_1);
