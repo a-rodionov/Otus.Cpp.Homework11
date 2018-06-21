@@ -43,10 +43,10 @@ public:
     return threads_statistics_copy;
   }
 
-  void Output(const std::size_t, const std::list<std::string>& data) override {
+  void Output(const std::size_t, std::shared_ptr<const std::list<std::string>>& data) override {
     AddTask([this, data]() {
       std::unique_lock<std::mutex> lock_out(ostream_mutex);
-      OutputFormattedBulk(out, data);
+      OutputFormattedBulk(out, *data);
       lock_out.unlock();
 
       // shared_lock используется потому что состав коллекции threads_statistics изменен не будет.
@@ -59,7 +59,7 @@ public:
       lock_statistics.unlock();
       // Каждый поток модифицирует только свою статистику, поэтому безопасно ее модифицировать без блокировки.
       ++statistics->second.blocks;
-      statistics->second.commands += data.size();
+      statistics->second.commands += data->size();
     });
   }
 

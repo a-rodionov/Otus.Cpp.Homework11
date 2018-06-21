@@ -14,23 +14,24 @@ public:
 
 
   void Push(const std::string& new_data) override {
-    if(data.empty()) {
+    if(!data) {
       timestamp = std::chrono::duration_cast<std::chrono::microseconds>(
                   std::chrono::system_clock::now().time_since_epoch()).count();
+      data = std::make_shared<std::list<std::string>>();
     }
-    data.push_back(new_data);
+    data->push_back(new_data);
     if(!is_dynamic_size
-      && (block_size == data.size())) {
+      && (block_size == data->size())) {
       Flush();
     }
   }
 
   void Flush() override {
-    if(!data.empty()) {
+    if(data) {
       ++statistics.blocks;
-      statistics.commands += data.size();
+      statistics.commands += data->size();
       Output(timestamp, data);
-      data.clear();
+      data.reset();
     }
   }
 
@@ -47,6 +48,6 @@ public:
 private:
   const std::size_t block_size;
   bool is_dynamic_size;
-  std::list<std::string> data;
+  std::shared_ptr<std::list<std::string>> data;
   std::size_t timestamp;
 };

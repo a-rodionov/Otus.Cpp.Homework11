@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <time.h>
 #include <list>
 #include <string>
@@ -19,6 +20,6 @@ class IOutput
 {
 public:
 
-  virtual void Output(const std::size_t timestamp, const std::list<std::string>& data) = 0;
+  virtual void Output(const std::size_t timestamp, std::shared_ptr<const std::list<std::string>>& data) = 0;
 
 };

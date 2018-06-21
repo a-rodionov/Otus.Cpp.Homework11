@@ -60,10 +60,10 @@ public:
     return threads_statistics_copy;
   }
 
-  void Output(const std::size_t timestamp, const std::list<std::string>& data) override {
+  void Output(const std::size_t timestamp, std::shared_ptr<const std::list<std::string>>& data) override {
     unsigned short unique_counter = counter++;
     AddTask([this, timestamp, data, unique_counter]() {
-      WriteBulkToFile(timestamp, data, unique_counter);
+      WriteBulkToFile(timestamp, *data, unique_counter);
 
       std::shared_lock<std::shared_timed_mutex> lock_statistics(statistics_mutex);
       auto statistics = threads_statistics.find(std::this_thread::get_id());
@@ -72,7 +72,7 @@ public:
       lock_statistics.unlock();
       // Каждый поток модифицирует только свою статистику, поэтому безопасно ее модифицировать без блокировки.
       ++statistics->second.blocks;
-      statistics->second.commands += data.size();
+      statistics->second.commands += data->size();
 
       std::lock_guard<std::shared_timed_mutex> lock_filenames(filenames_mutex);
       processed_filenames.push_back(MakeFilename(timestamp, unique_counter));

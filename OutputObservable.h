@@ -8,7 +8,7 @@ class OutputObservable : public Observable<IOutput>
 
 protected:
 
-  void Output(const std::size_t timestamp, const std::list<std::string>& data) {
+  void Output(const std::size_t timestamp, std::shared_ptr<const std::list<std::string>> data) {
     for (const auto& subscriber : subscribers) {
       auto subscriber_locked = subscriber.lock();
       if(subscriber_locked) {
