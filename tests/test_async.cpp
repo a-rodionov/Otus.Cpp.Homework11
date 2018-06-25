@@ -176,4 +176,9 @@ BOOST_AUTO_TEST_CASE(process_multiple_handles)
   BOOST_REQUIRE_EQUAL(oss_2.str(), result_2);
 }
 
+BOOST_AUTO_TEST_CASE(remove_test_files)
+{
+  std::system("rm -f *.log");
+}
+
 BOOST_AUTO_TEST_SUITE_END()

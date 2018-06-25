@@ -27,6 +27,8 @@ BOOST_AUTO_TEST_CASE(flush_incomplete_block_by_end)
   BOOST_REQUIRE( std::string::npos != logContent.find(errorMsg) );
 
   ifs.close();
+
+  std::system("rm -f *.log");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

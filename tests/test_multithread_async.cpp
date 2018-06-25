@@ -249,10 +249,6 @@ BOOST_AUTO_TEST_CASE(multithread_async_app)
   std::vector<std::string> result;
   result.reserve(ethalon.size());
 
-  std::system("rm -f *.log");
-  std::system("rm -f console.output");
-  std::system("rm -f unique.output");
-
   auto path = GetCurrentWorkingDir();
   path += "/multithread_async_app";
   std::string cmd{"seq 1 5000 | "};
