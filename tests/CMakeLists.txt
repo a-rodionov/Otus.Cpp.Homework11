@@ -20,3 +20,10 @@ test(test_multithread_file_output)
 test(test_boost_log)
 test(test_async)
 test(test_multithread_async)
+
+add_executable (multithread_async_app multithread_async_app.cpp)
+target_include_directories(multithread_async_app PRIVATE ${PROJECT_SOURCE_DIR})
+target_link_libraries (multithread_async_app 
+    async
+    ${CMAKE_THREAD_LIBS_INIT}
+)

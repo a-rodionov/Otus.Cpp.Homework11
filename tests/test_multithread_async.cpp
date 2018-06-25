@@ -2,6 +2,7 @@
 #include <algorithm>
 #include "async.h"
 #include "ContextManager.h"
+#include <unistd.h>
 
 #define BOOST_TEST_MODULE test_multithread_async
 
@@ -216,6 +217,64 @@ BOOST_AUTO_TEST_CASE(multiple_contexts_in_thread)
   for(const auto& test_set : test_sets) {
     BOOST_REQUIRE_EQUAL(test_set.output.str(), test_set.result);
   }
+}
+
+
+
+std::string GetCurrentWorkingDir( void ) {
+  char buff[FILENAME_MAX];
+  ssize_t len = sizeof(buff);
+  int bytes = std::min(readlink("/proc/self/exe", buff, len), len - 1);
+  if(bytes >= 0)
+      buff[bytes] = '\0';
+  std::string current_working_dir(buff);
+  return current_working_dir.substr(0, current_working_dir.find_last_of('/'));
+}
+
+BOOST_AUTO_TEST_CASE(multithread_async_app)
+{
+  std::vector<std::string> ethalon {
+    {"bulk: 0 0, , 1 1"},
+    {"bulk: 11"},
+    {"bulk: , 12, 13"},
+    {"bulk: 12, 13, 14"},
+    {"bulk: 14"},
+    {"bulk: 15"},
+    {"bulk: 16, 17, 18, 19, 20"},
+    {"bulk: 21, 22, 23, , 12, 13, 14"},
+    {"bulk: 2, 3, 4"},
+    {"bulk: 5, 6, 7"},
+    {"bulk: 8, 9, 10"}
+  };
+  std::vector<std::string> result;
+  result.reserve(ethalon.size());
+
+  std::system("rm -f *.log");
+  std::system("rm -f console.output");
+  std::system("rm -f unique.output");
+
+  auto path = GetCurrentWorkingDir();
+  path += "/multithread_async_app";
+  std::string cmd{"seq 1 5000 | "};
+  cmd += path;
+  cmd += " > console.output";
+  std::system(cmd.c_str());
+  std::system("sort console.output | uniq > unique.output");
+
+  std::ifstream ifs{"unique.output", std::ifstream::in};
+  BOOST_REQUIRE_EQUAL(true, ifs.is_open());
+  for(std::string line; getline(ifs, line);) {
+    result.push_back(line);
+  }
+  ifs.close();
+
+  BOOST_CHECK_EQUAL_COLLECTIONS(std::cbegin(ethalon),
+                                std::cend(ethalon),
+                                std::cbegin(result),
+                                std::cend(result));
+  std::system("rm -f *.log");
+  std::system("rm -f console.output");
+  std::system("rm -f unique.output");
 }
 
 BOOST_AUTO_TEST_SUITE_END()
