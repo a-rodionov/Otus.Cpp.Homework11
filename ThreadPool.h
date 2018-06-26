@@ -61,9 +61,23 @@ public:
           break;
         }
         catch (std::exception& exc) {
-          BOOST_LOG_TRIVIAL(error) << exc.what();
-          std::lock_guard<std::mutex> lk(exceptions_mutex);
-          exceptions.push(std::current_exception());
+          auto exc_to_write = std::current_exception();
+          decltype(exc_to_write) exc_of_queue, exc_of_file;
+          if(!WriteExceptionToQueue(exc_to_write, exc_of_queue)) {
+            if(!WriteExceptionToFile(exc_of_queue, exc_of_file)
+              || !WriteExceptionToFile(exc_to_write, exc_of_file)) {
+              break;  // Все механизмы сообщения об ошибке в потоке не работают. Принудительно завершаем работу.
+            }
+          }
+          else {
+            if(!WriteExceptionToFile(exc_to_write, exc_of_file)) {
+              if(exc_of_file) {
+                if(!WriteExceptionToQueue(exc_of_file, exc_of_queue)) {
+                  break;  // Все механизмы сообщения об ошибке в потоке не работают. Принудительно завершаем работу.
+                }
+              }
+            }
+          }
         }
       }
     });
@@ -130,6 +144,41 @@ private:
     }
   }
 
+  bool WriteExceptionToFile(std::exception_ptr& exc_to_write,
+                            std::exception_ptr& exc_of_write) {
+    if(!is_error_log_working) {
+      return false;
+    }
+    
+    try {
+      std::rethrow_exception(exc_to_write);
+    }
+    catch (std::exception& exc) {
+      try {
+        BOOST_LOG_TRIVIAL(error) << exc.what();
+      }
+      catch (std::exception&) {
+        is_error_log_working = false;
+        exc_of_write = std::current_exception();
+        return false;
+      }
+    }
+    return true;
+  }
+
+  bool WriteExceptionToQueue(std::exception_ptr& exc_to_write, 
+                             std::exception_ptr& exc_of_write) {
+    try {
+      std::lock_guard<std::mutex> lk(exceptions_mutex);
+      exceptions.push(exc_to_write);
+      return true;
+    }
+    catch (std::exception& exc) {
+      exc_of_write = std::current_exception();
+      return false;
+    }
+  }
+
   boost::asio::io_service io_service;
   std::shared_ptr<boost::asio::io_service::work> work;
   std::vector<std::thread> threads;
@@ -141,4 +190,5 @@ private:
   std::atomic_bool is_new_thread_on_pause;
   std::atomic_bool is_new_thread_force_terminate;
   std::atomic_bool is_new_thread_started;
+  std::atomic_bool is_error_log_working{true};
 };
