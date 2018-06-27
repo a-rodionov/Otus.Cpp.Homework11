@@ -13,8 +13,7 @@ public:
           std::shared_ptr<SharedOstream>& shared_ostream,
           std::size_t consoleOutputThreads = 1,
           std::size_t fileOutputThreads = 2)
-    : shared_ostream{shared_ostream},
-    commandProcessor{std::make_unique<CommandProcessor>()},
+    : commandProcessor{std::make_unique<CommandProcessor>()},
     storage{std::make_shared<Storage>(bulkSize)},
     consoleOutput{std::make_shared<ConsoleOutput>(shared_ostream, consoleOutputThreads)},
     fileOutput{std::make_shared<FileOutput>(fileOutputThreads)}
@@ -38,7 +37,6 @@ public:
 private:
 
   std::mutex process_mutex;
-  std::shared_ptr<SharedOstream> shared_ostream;
   std::unique_ptr<CommandProcessor> commandProcessor;
   std::shared_ptr<Storage> storage;
   std::shared_ptr<ConsoleOutput> consoleOutput;

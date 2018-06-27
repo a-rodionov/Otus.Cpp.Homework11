@@ -61,7 +61,7 @@ public:
   }
 
   void Output(const std::size_t timestamp, std::shared_ptr<const std::list<std::string>>& data) override {
-    unsigned short unique_counter = counter++;
+    auto unique_counter = counter++;
     AddTask([this, timestamp, data, unique_counter]() {
       WriteBulkToFile(timestamp, *data, unique_counter);
 
@@ -90,6 +90,6 @@ protected:
   std::shared_timed_mutex statistics_mutex;
 
   std::vector<std::string> processed_filenames;
-  std::atomic_ushort counter{0};
+  unsigned short counter{0};
   mutable std::shared_timed_mutex filenames_mutex;
 };
