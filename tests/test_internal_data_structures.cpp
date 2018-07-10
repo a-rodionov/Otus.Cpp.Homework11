@@ -36,7 +36,7 @@ BOOST_AUTO_TEST_CASE(observable)
   };
 
   TestObservable testObservable;
-  auto consoleOutput = std::make_shared<ConsoleOutput>(std::cout);
+  auto consoleOutput = std::make_shared<ConsoleOutput>(std::shared_ptr<std::ostream>{&std::cout, [](auto*){}});
   bool isSubscriberFound{false};
 
   BOOST_CHECK_EQUAL(0, testObservable.GetSubscribersCount());

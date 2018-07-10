@@ -6,43 +6,22 @@
 #include "ThreadPool.h"
 #include "Statistics.h"
 
-using ostream_lock = std::pair<std::ostream&, std::unique_lock<std::mutex>>;
-
-class SharedOstream {
-
-public:
-
-  explicit SharedOstream(std::ostream& out)
-    : out{out} {}
-
-  ostream_lock GetOstreamLock() {
-    std::unique_lock<std::mutex> lock(ostream_mutex);
-    return std::make_pair(std::ref(out), std::move(lock));
-  }
-
-private:
-
-  std::ostream& out;
-  std::mutex ostream_mutex;
-
-};
-
 class ConsoleOutput : public IOutput, public ThreadPool
 {
 
 public:
 
-  explicit ConsoleOutput(std::shared_ptr<SharedOstream>& shared_ostream, size_t threads_count = 1)
-    : shared_ostream{shared_ostream}
+  explicit ConsoleOutput(std::shared_ptr<std::ostream>& out, size_t threads_count = 1)
+    : out{out}
   {
     for(decltype(threads_count) i{0}; i < threads_count; ++i) {
       AddWorker();
     }
   }
 
-  explicit ConsoleOutput(std::ostream& out, size_t threads_count = 1)
+  explicit ConsoleOutput(std::shared_ptr<std::ostream>&& out, size_t threads_count = 1)
+    : out{std::move(out)}
   {
-    shared_ostream = std::make_shared<SharedOstream>(out);
     for(decltype(threads_count) i{0}; i < threads_count; ++i) {
       AddWorker();
     }
@@ -73,10 +52,14 @@ public:
   }
 
   void Output(const std::size_t, std::shared_ptr<const std::list<std::string>>& data) override {
-    AddTask([this, data]() {
-      auto out = shared_ostream->GetOstreamLock();
-      OutputFormattedBulk(out.first, *data);
-      out.second.unlock();
+
+    while (out_locked.test_and_set(std::memory_order_acquire)) {} // spin lock
+    auto out_copy = out;
+    out_locked.clear(std::memory_order_release);
+
+    AddTask([this, out_copy, data]() {
+
+      OutputFormattedBulk(*out_copy, *data);
 
       // shared_lock используется потому что состав коллекции threads_statistics изменен не будет.
       // В threads_statistics необходимо лишь выполнить поиск структуры соответствующей
@@ -92,9 +75,22 @@ public:
     });
   }
 
+  void SetDefaultOstream(std::shared_ptr<std::ostream>& ostream) {
+    while (out_locked.test_and_set(std::memory_order_acquire)) {} // spin lock
+    out = ostream;
+    out_locked.clear(std::memory_order_release);
+  }
+
+  void SetDefaultOstream(std::shared_ptr<std::ostream>&& ostream) {
+    while (out_locked.test_and_set(std::memory_order_acquire)) {} // spin lock
+    out = std::move(ostream);
+    out_locked.clear(std::memory_order_release);
+  }
+
 private:
 
-  std::shared_ptr<SharedOstream> shared_ostream;
+  std::atomic_flag out_locked = ATOMIC_FLAG_INIT;
+  std::shared_ptr<std::ostream> out;
 
   std::map<std::thread::id, Statistics> threads_statistics;
   std::shared_timed_mutex statistics_mutex;

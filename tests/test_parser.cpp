@@ -13,6 +13,7 @@ struct initialized_command_processor
 {
   initialized_command_processor()
   {
+    oss = std::make_shared<std::ostringstream>();
     commandProcessor = std::make_unique<CommandProcessor>();
     storage = std::make_shared<Storage>(3);
     consoleOutput = std::make_shared<ConsoleOutput>(oss);
@@ -24,7 +25,7 @@ struct initialized_command_processor
   std::unique_ptr<CommandProcessor> commandProcessor;
   std::shared_ptr<Storage> storage;
   std::shared_ptr<ConsoleOutput> consoleOutput;
-  std::ostringstream oss;
+  std::shared_ptr<std::ostringstream> oss;
 };
 
 BOOST_FIXTURE_TEST_SUITE(test_suite_main, initialized_command_processor)
@@ -44,7 +45,7 @@ BOOST_AUTO_TEST_CASE(flush_incomplete_block_by_end)
   commandProcessor->Process(&testData.front(), testData.size(), true);
   consoleOutput->StopWorkers();
 
-  BOOST_CHECK_EQUAL(oss.str(), result);
+  BOOST_CHECK_EQUAL(oss->str(), result);
 }
 
 BOOST_AUTO_TEST_CASE(new_block_size)
@@ -72,7 +73,7 @@ BOOST_AUTO_TEST_CASE(new_block_size)
   commandProcessor->Process(&testData.front(), testData.size(), true);
   consoleOutput->StopWorkers();
 
-  BOOST_CHECK_EQUAL(oss.str(), result);
+  BOOST_CHECK_EQUAL(oss->str(), result);
 }
 
 BOOST_AUTO_TEST_CASE(flush_incomplete_block_by_new_block_size)
@@ -93,7 +94,7 @@ BOOST_AUTO_TEST_CASE(flush_incomplete_block_by_new_block_size)
   commandProcessor->Process(&testData.front(), testData.size(), true);
   consoleOutput->StopWorkers();
 
-  BOOST_CHECK_EQUAL(oss.str(), result);
+  BOOST_CHECK_EQUAL(oss->str(), result);
 }
 
 BOOST_AUTO_TEST_CASE(flush_incomplete_block_by_closing_brace)
@@ -115,7 +116,7 @@ BOOST_AUTO_TEST_CASE(flush_incomplete_block_by_closing_brace)
   commandProcessor->Process(&testData.front(), testData.size(), true);
   consoleOutput->StopWorkers();
 
-  BOOST_CHECK_EQUAL(oss.str(), result);
+  BOOST_CHECK_EQUAL(oss->str(), result);
 }
 
 BOOST_AUTO_TEST_CASE(ignore_nested_new_block_size)
@@ -137,7 +138,7 @@ BOOST_AUTO_TEST_CASE(ignore_nested_new_block_size)
   commandProcessor->Process(&testData.front(), testData.size(), true);
   consoleOutput->StopWorkers();
   
-  BOOST_CHECK_EQUAL(oss.str(), result);
+  BOOST_CHECK_EQUAL(oss->str(), result);
 }
 
 BOOST_AUTO_TEST_CASE(incomplete_new_block_size)
@@ -157,7 +158,7 @@ BOOST_AUTO_TEST_CASE(incomplete_new_block_size)
   commandProcessor->Process(&testData.front(), testData.size(), true);
   consoleOutput->StopWorkers();
   
-  BOOST_CHECK_EQUAL(oss.str(), result);
+  BOOST_CHECK_EQUAL(oss->str(), result);
 }
 
 BOOST_AUTO_TEST_CASE(command_after_brace_on_same_line_1)
@@ -179,7 +180,7 @@ BOOST_AUTO_TEST_CASE(command_after_brace_on_same_line_1)
   commandProcessor->Process(&testData.front(), testData.size(), true);
   consoleOutput->StopWorkers();
 
-  BOOST_CHECK_EQUAL(oss.str(), result);
+  BOOST_CHECK_EQUAL(oss->str(), result);
 }
 
 BOOST_AUTO_TEST_CASE(command_after_brace_on_same_line_2)
@@ -201,7 +202,7 @@ BOOST_AUTO_TEST_CASE(command_after_brace_on_same_line_2)
   commandProcessor->Process(&testData.front(), testData.size(), true);
   consoleOutput->StopWorkers();
 
-  BOOST_CHECK_EQUAL(oss.str(), result);
+  BOOST_CHECK_EQUAL(oss->str(), result);
 }
 
 BOOST_AUTO_TEST_CASE(brace_after_command_on_same_line)
@@ -219,7 +220,7 @@ BOOST_AUTO_TEST_CASE(brace_after_command_on_same_line)
   commandProcessor->Process(&testData.front(), testData.size(), true);
   consoleOutput->StopWorkers();
 
-  BOOST_CHECK_EQUAL(oss.str(), result);
+  BOOST_CHECK_EQUAL(oss->str(), result);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

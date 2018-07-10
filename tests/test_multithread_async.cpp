@@ -22,9 +22,7 @@ auto close_handle = [] (handle_t handle) {
 using smart_handle = std::unique_ptr<void, decltype(close_handle)>;
 
 struct SingleContextTestSet {
-  std::ostringstream output;
   std::string input;
-  std::string result;
   std::thread thread;
 };
 
@@ -32,7 +30,7 @@ void CallAllFunctionsInSingleThread(
         SingleContextTestSet& test_set,
         std::atomic_bool& is_thread_ready,
         std::atomic_bool& start_thread) {
-  ContextManager::Instance().SetDefaultOstream(std::make_shared<SharedOstream>(test_set.output));
+
   smart_handle handle(connect(3), close_handle);
 
   is_thread_ready = true;
@@ -54,9 +52,6 @@ BOOST_AUTO_TEST_CASE(single_context_in_thread)
                         "cmd14\n"
                         "cmd15\n"};
 
-  test_sets[0].result = {"bulk: cmd11, cmd12, cmd13\n"
-                         "bulk: cmd14, cmd15\n"};
-
   test_sets[1].input = {"cmd21\n"
                         "{\n"
                         "cmd22\n"
@@ -65,10 +60,6 @@ BOOST_AUTO_TEST_CASE(single_context_in_thread)
                         "cmd24\n"
                         "cmd25\n"};
 
-  test_sets[1].result = {"bulk: cmd21\n"
-                         "bulk: cmd22, cmd23\n"
-                         "bulk: cmd24, cmd25\n"};
-
   test_sets[2].input = {"cmd31\n"
                         "cmd32\n"
                         "{\n"
@@ -76,7 +67,20 @@ BOOST_AUTO_TEST_CASE(single_context_in_thread)
                         "cmd34\n"
                         "cmd35\n"};
 
-  test_sets[2].result = {"bulk: cmd31, cmd32\n"};
+  std::vector<std::string> ethalon {
+    {"bulk: cmd11, cmd12, cmd13"},
+    {"bulk: cmd14, cmd15"},
+    {"bulk: cmd21"},
+    {"bulk: cmd22, cmd23"},
+    {"bulk: cmd24, cmd25"},
+    {"bulk: cmd31, cmd32"},
+  };
+
+  std::vector<std::string> result;
+  result.reserve(ethalon.size());
+
+  auto oss = std::make_shared<std::ostringstream>();
+  ContextManager::Instance().SetDefaultOstream(oss);
 
   std::atomic_bool start_threads{false};
   std::atomic_bool is_thread_ready{false};
@@ -101,16 +105,31 @@ BOOST_AUTO_TEST_CASE(single_context_in_thread)
   }
   std::this_thread::sleep_for(200ms);
 
-  for(const auto& test_set : test_sets) {
-    BOOST_REQUIRE_EQUAL(test_set.output.str(), test_set.result);
+  size_t prev = 0, pos = 0;
+  auto result_str = oss->str();
+  do
+  {
+    pos = result_str.find('\n', prev);
+    if (std::string::npos == pos)
+      break;
+    result.push_back(result_str.substr(prev, pos-prev));
+    prev = pos + 1;
   }
+  while (pos < result_str.length() && prev < result_str.length());
+
+  std::sort(std::begin(ethalon), std::end(ethalon));
+  std::sort(std::begin(result), std::end(result));
+  BOOST_REQUIRE_EQUAL_COLLECTIONS(std::cbegin(ethalon),
+                                  std::cend(ethalon),
+                                  std::cbegin(result),
+                                  std::cend(result));
 }
 
 
 struct MultipleContextsTestSet {
-  std::ostringstream output;
+  //std::ostringstream output;
   std::string input;
-  std::string result;
+  //std::string result;
   std::thread thread;
   handle_t handle;
   std::atomic_size_t position;
@@ -157,9 +176,6 @@ BOOST_AUTO_TEST_CASE(multiple_contexts_in_thread)
                         "cmd13\n"
                         "cmd14\n"
                         "cmd15\n"};
-
-  test_sets[0].result = {"bulk: cmd11, cmd12, cmd13\n"
-                         "bulk: cmd14, cmd15\n"};
   test_sets[0].position = 0;
 
   test_sets[1].input = {"cmd21\n"
@@ -169,10 +185,6 @@ BOOST_AUTO_TEST_CASE(multiple_contexts_in_thread)
                         "}\n"
                         "cmd24\n"
                         "cmd25\n"};
-
-  test_sets[1].result = {"bulk: cmd21\n"
-                         "bulk: cmd22, cmd23\n"
-                         "bulk: cmd24, cmd25\n"};
   test_sets[1].position = 0;
 
   test_sets[2].input = {"cmd31\n"
@@ -181,9 +193,22 @@ BOOST_AUTO_TEST_CASE(multiple_contexts_in_thread)
                         "cmd33\n"
                         "cmd34\n"
                         "cmd35\n"};
-
-  test_sets[2].result = {"bulk: cmd31, cmd32\n"};
   test_sets[2].position = 0;
+
+  std::vector<std::string> ethalon {
+    {"bulk: cmd11, cmd12, cmd13"},
+    {"bulk: cmd14, cmd15"},
+    {"bulk: cmd21"},
+    {"bulk: cmd22, cmd23"},
+    {"bulk: cmd24, cmd25"},
+    {"bulk: cmd31, cmd32"}
+  };
+
+  std::vector<std::string> result;
+  result.reserve(ethalon.size());
+
+  auto oss = std::make_shared<std::ostringstream>();
+  ContextManager::Instance().SetDefaultOstream(oss);
 
   test_sets[0].max_position = test_sets[1].max_position = test_sets[2].max_position = 
     std::max_element(std::cbegin(test_sets),
@@ -196,7 +221,6 @@ BOOST_AUTO_TEST_CASE(multiple_contexts_in_thread)
 
   // Все контексты будут открыты в главном потоке, а закрыты в отдельных потоках
   for(size_t i{0}; i < test_sets.size(); ++i) {
-    ContextManager::Instance().SetDefaultOstream(std::make_shared<SharedOstream>(test_sets[i].output));
     test_sets[i].handle = connect(3);
     test_sets[i].thread = std::thread(CallAllFunctionsInMultipleThreads<test_sets.size()>,
                                       std::ref(test_sets),
@@ -214,9 +238,24 @@ BOOST_AUTO_TEST_CASE(multiple_contexts_in_thread)
   }
   std::this_thread::sleep_for(200ms);
 
-  for(const auto& test_set : test_sets) {
-    BOOST_REQUIRE_EQUAL(test_set.output.str(), test_set.result);
+  size_t prev = 0, pos = 0;
+  auto result_str = oss->str();
+  do
+  {
+    pos = result_str.find('\n', prev);
+    if (std::string::npos == pos)
+      break;
+    result.push_back(result_str.substr(prev, pos-prev));
+    prev = pos + 1;
   }
+  while (pos < result_str.length() && prev < result_str.length());
+
+  std::sort(std::begin(ethalon), std::end(ethalon));
+  std::sort(std::begin(result), std::end(result));
+  BOOST_REQUIRE_EQUAL_COLLECTIONS(std::cbegin(ethalon),
+                                  std::cend(ethalon),
+                                  std::cbegin(result),
+                                  std::cend(result));
 }
 
 
@@ -271,6 +310,11 @@ BOOST_AUTO_TEST_CASE(multithread_async_app)
   std::system("rm -f *.log");
   std::system("rm -f console.output");
   std::system("rm -f unique.output");
+}
+
+BOOST_AUTO_TEST_CASE(remove_test_files)
+{
+  std::system("rm -f *.log");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

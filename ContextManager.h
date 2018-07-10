@@ -7,7 +7,7 @@
 
 using namespace async;
 
-auto default_ostream = std::make_shared<SharedOstream>(std::cout);
+std::shared_ptr<std::ostream> default_ostream(&std::cout, [](auto*){});
 
 template<class T>
 struct pointer_cmp {
@@ -42,13 +42,18 @@ public:
     return contextManager;
   }
 
+  ~ContextManager() {
+    consoleOutput->StopWorkers();
+    fileOutput->StopWorkers();
+  }
+
   ContextManager(const ContextManager&) = delete;
   ContextManager& operator=(const ContextManager&) = delete;
   ContextManager(const ContextManager&&) = delete;
   ContextManager& operator=(const ContextManager&&) = delete;
 
   handle_t MakeContext(std::size_t bulkSize) {
-    auto context = std::make_shared<Context>(bulkSize, default_ostream);
+    auto context = std::make_shared<Context>(bulkSize, consoleOutput, fileOutput);
     std::lock_guard<std::shared_timed_mutex> exclusive_lk(member_mutex);
     auto result = contexts.insert(std::move(context));
     return reinterpret_cast<handle_t>(result.first->get());
@@ -70,22 +75,23 @@ public:
     return *context;
   }
 
-  void SetDefaultOstream(std::shared_ptr<SharedOstream>& shared_ostream) {
-    std::lock_guard<std::shared_timed_mutex> exclusive_lk(member_mutex);
-    default_ostream = shared_ostream;
+  void SetDefaultOstream(std::shared_ptr<std::ostream>& ostream) {
+    consoleOutput->SetDefaultOstream(ostream);
   }
 
-  void SetDefaultOstream(std::shared_ptr<SharedOstream>&& shared_ostream) {
-    std::lock_guard<std::shared_timed_mutex> exclusive_lk(member_mutex);
-    default_ostream = std::move(shared_ostream);
+  void SetDefaultOstream(std::shared_ptr<std::ostream>&& ostream) {
+    consoleOutput->SetDefaultOstream(std::move(ostream));
   }
 
 private:
 
   ContextManager()
-    : default_ostream(::default_ostream) {}
+  : consoleOutput{std::make_shared<ConsoleOutput>(::default_ostream, 1)},
+    fileOutput{std::make_shared<FileOutput>(std::thread::hardware_concurrency())} {}
 
   mutable std::shared_timed_mutex member_mutex;
   std::set<std::shared_ptr<Context>, pointer_cmp<Context>> contexts;
-  std::shared_ptr<SharedOstream> default_ostream;
+
+  std::shared_ptr<ConsoleOutput> consoleOutput;
+  std::shared_ptr<FileOutput> fileOutput;
 };

@@ -10,13 +10,10 @@ class Context {
 public:
 
   Context(std::size_t bulkSize,
-          std::shared_ptr<SharedOstream>& shared_ostream,
-          std::size_t consoleOutputThreads = 1,
-          std::size_t fileOutputThreads = 2)
+          std::shared_ptr<ConsoleOutput>& consoleOutput,
+          std::shared_ptr<FileOutput>& fileOutput)
     : commandProcessor{std::make_unique<CommandProcessor>()},
-    storage{std::make_shared<Storage>(bulkSize)},
-    consoleOutput{std::make_shared<ConsoleOutput>(shared_ostream, consoleOutputThreads)},
-    fileOutput{std::make_shared<FileOutput>(fileOutputThreads)}
+    storage{std::make_shared<Storage>(bulkSize)}
   {
     storage->Subscribe(consoleOutput);
     storage->Subscribe(fileOutput);
@@ -25,8 +22,6 @@ public:
 
   ~Context() {
     commandProcessor->Process(nullptr, 0, true);
-    consoleOutput->StopWorkers();
-    fileOutput->StopWorkers();
   }
 
   void Process(const char* data, std::size_t size) {
@@ -39,6 +34,5 @@ private:
   std::mutex process_mutex;
   std::unique_ptr<CommandProcessor> commandProcessor;
   std::shared_ptr<Storage> storage;
-  std::shared_ptr<ConsoleOutput> consoleOutput;
-  std::shared_ptr<FileOutput> fileOutput;
+
 };
