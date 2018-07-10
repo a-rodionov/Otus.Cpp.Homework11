@@ -290,7 +290,7 @@ BOOST_AUTO_TEST_CASE(multithread_async_app)
 
   auto path = GetCurrentWorkingDir();
   path += "/multithread_async_app";
-  std::string cmd{"seq 1 5000 | "};
+  std::string cmd{"seq 1 500 | "};
   cmd += path;
   cmd += " > console.output";
   std::system(cmd.c_str());
